@@ -15,7 +15,8 @@ $app->route('/mentors/@slug', [Pages::class, 'mentor']);
 
 // Auth
 $app->route('/login', function() use ($app) {
-  $app->render('fronts/login');
+  // $app->render('fronts/login');
+  $app->json(WpApi::init()->login('imshibaji', 'Sdnsdn1497@1'));
 });
 
 $app->route('/register', function() use ($app) {
@@ -37,6 +38,16 @@ $app->route('/menus', function() use ($app) {
 $app->route('/json', function() use($app) {
   $wpapi = new WpApi($app);
   $app->json($wpapi->getPages());
+});
+
+$app->route('/token', function() use($app) {
+  $wpapi = new WpApi();
+  $app->json($wpapi->getCache('user_token'));
+});
+
+$app->route('/posts', function() use($app) {
+  $wpapi = new WpApi();
+  $app->json($wpapi->getPosts());
 });
 
 $app->route('/seo', function() use($app) {
