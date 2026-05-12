@@ -1,0 +1,41 @@
+{
+  "name": "miniapp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "targets": {
+    "main_js": {
+      "source": "app/ts/main.tsx",
+      "distDir": "assets/js",
+      "sourceMap": false
+    },
+    "main_css": {
+      "source": "app/styles/main.css",
+      "distDir": "assets/css",
+      "sourceMap": false
+    }
+  },
+  "scripts": {
+    "dev": "parcel watch",
+    "build": "parcel build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@tailwindcss/cli": "^4.2.4",
+    "@tailwindcss/postcss": "^4.2.4",
+    "flyonui": "^2.4.1",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "parcel": "^2.16.4",
+    "parcel-plugin-custom-dist-structure": "^1.1.20",
+    "tailwindcss": "^4.2.4"
+  }
+}

@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@plugin "flyonui";
+@import "../../node_modules/flyonui/variants.css"; /* Require only if you want to use FlyonUI JS component */
+
+@source "../../node_modules/flyonui/dist/index.js";
+
+@source "../app/**/*.(php || tsx || jsx || js || ts || html)";
+
+@import "./wp.css";

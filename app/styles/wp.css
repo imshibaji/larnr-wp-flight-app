@@ -1,0 +1,114 @@
+/* Layout & Containers */
+@source inline("wp-block-group has-global-padding is-layout-constrained wp-block-group-is-layout-constrained");
+@source inline("py-4 bg-white border-b border-slate-200 wp-block-ska-element");
+@source inline("flex justify-between items-center px-6 mx-auto max-w-7xl");
+@source inline("flex flex-col lg:flex-row gap-12 grow flex-grow transition-all duration-300");
+@source inline("wp-block-group is-layout-flow wp-block-group-is-layout-flow px-6 mx-auto mb-24 max-w-7xl wp-block-ska-element");
+
+/* Navigation & Text */
+@source inline("text-sm font-medium text-slate-500 hover:text-indigo-600");
+@source inline("mx-2 text-slate-900 font-semibold tracking-wider uppercase");
+@source inline("text-lg font-bold line-clamp-2 pb-1 border-b-2 border-indigo-600");
+
+/* Sidebar & Forms */
+@source inline("flex-shrink-0 hidden lg:block shrink-0 space-y-8 w-full lg:w-64");
+@source inline("space-y-3 pt-6 border-t gap-3 cursor-pointer transition");
+@source inline("w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500");
+@source inline("p-2.5 outline-none focus:ring-2 bg-slate-50 rounded-lg");
+
+/* Search & Inputs */
+@source inline("relative py-3 pr-4 pl-12 shadow-sm rounded-2xl");
+@source inline("absolute top-3.5 left-4 w-5 h-5 text-slate-400 self-end");
+
+/* Course Cards & Grid */
+@source inline("grid grid-cols-1 md:grid-cols-2 gap-6 hover:shadow-xl group");
+@source inline("overflow-hidden relative h-48 duration-500 group-hover:scale-105");
+@source inline("object-cover w-full h-full p-6 mt-auto text-yellow-400");
+@source inline("top-4 right-4 px-2 py-1 font-black tracking-tighter bg-white/90 backdrop-blur");
+
+/* Badges & Instructor */
+@source inline("text-[10px] px-2 py-0.5 bg-indigo-50 bg-green-50 text-green-600");
+@source inline("w-8 h-8 rounded-full border-white shadow-sm font-black text-xl");
+
+/* Pagination */
+@source inline("mt-12 w-10 h-10 no-underline shadow-lg shadow-indigo-100");
+
+/* Hero/CTA Container & Effects */
+@source inline("overflow-hidden relative p-12 lg:p-20 text-center bg-indigo-600 rounded-[3rem] shadow-2xl shadow-indigo-200");
+@source inline("absolute top-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 relative z-10");
+
+/* Typography */
+@source inline("mt-0 mb-6 text-4xl lg:text-5xl font-bold text-white wp-block-heading mb-10 max-w-2xl text-lg text-indigo-100");
+
+/* Buttons & Interactive States */
+@source inline("flex flex-col sm:flex-row gap-4 justify-center px-10 py-4 font-bold no-underline rounded-2xl transition hover:scale-105");
+@source inline("text-indigo-600 bg-white text-white bg-indigo-500 hover:bg-indigo-400 border border-indigo-400");
+
+
+/* Layout & Structure */
+@source inline("wp-block-group alignfull is-layout-flow wp-block-group-is-layout-flow has-background");
+@source inline("py-16 border-b border-slate-200 wp-block-ska-element px-6 mx-auto max-w-7xl text-center");
+@source inline("main py-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8");
+
+/* Hero Section Typography & Buttons */
+@source inline("mt-0 mb-4 text-4xl md:text-5xl font-black text-slate-50 text-indigo-400 text-lg max-w-2xl mt-10");
+@source inline("flex flex-wrap gap-3 justify-center px-6 py-2 text-sm font-semibold text-white no-underline bg-slate-900 rounded-full");
+@source inline("text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 hover:border-indigo-600 transition");
+
+/* Mentor Cards & Avatars */
+@source inline("p-8 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 group");
+@source inline("relative w-32 h-32 mb-6 object-cover rounded-[2rem] ring-4 ring-indigo-50 group-hover:ring-indigo-100 transition");
+@source inline("absolute -right-2 -bottom-2 w-6 h-6 bg-green-500 bg-amber-400 rounded-full border-4 border-white");
+
+/* Card Content & Stats */
+@source inline("space-y-2 text-xl font-bold text-slate-900 font-semibold tracking-wider uppercase text-indigo-600 text-sm line-clamp-2 text-slate-500");
+@source inline("flex justify-between py-6 mt-6 border-t border-slate-50 text-lg text-[10px] text-slate-400");
+
+/* Skills & CTA Buttons */
+@source inline("flex flex-wrap gap-2 mb-8 px-3 py-1 text-xs font-medium text-slate-600 bg-slate-50 rounded-lg");
+@source inline("block px-4 py-4 font-bold text-slate-900 group-hover:text-white bg-slate-50 group-hover:bg-indigo-600 rounded-2xl");
+
+
+/* Container & Layout */
+@source inline("overflow-hidden relative text-white bg-indigo-900 wp-block-group has-background is-layout-flow wp-block-group-is-layout-flow");
+@source inline("py-20 wp-block-ska-element px-6 mx-auto max-w-7xl relative z-10");
+
+/* Decorative Background Elements */
+@source inline("absolute top-0 right-0 w-1/2 h-full bg-indigo-800/50 translate-x-32 skew-x-12");
+
+/* Typography */
+@source inline("mt-0 mb-6 text-4xl md:text-5xl font-black text-indigo-400 mb-10 max-w-xl text-lg text-indigo-100");
+
+/* Form Elements (Search Input) */
+@source inline("flex flex-col md:flex-row gap-4 max-w-3xl grow py-4 pr-4 pl-12 font-medium text-slate-900 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/50");
+@source inline("w-[85%] md:w-[90%] absolute top-4 left-4 text-slate-400");
+
+/* Buttons */
+@source inline("px-8 py-4 font-bold text-white no-underline bg-indigo-500 hover:bg-indigo-400 shadow-lg transition");
+
+
+/* My Custom CSS */
+@source inline("relative w-full md:w-96 flex-grow grow px-6 py-12 flex justify-between items-center mb-10 hidden sm:flex");
+@source inline("grid grid-cols-1 lg:grid-cols-2 gap-8");
+@source inline("flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg");
+@source inline("flex-col md:flex-row gap-4 max-w-3xl");
+@source inline("px-8 py-4 font-bold text-white no-underline bg-indigo-500 hover:bg-indigo-400 rounded-2xl shadow-lg transition");
+@source inline("group bg-white rounded-[2.5rem] overflow-hidden border border-slate-200 flex flex-col md:flex-row hover:shadow-2xl transition-all duration-500");
+@source inline("md:w-2/5 md:w-3/5 gap-4 relative overflow-hidden h-full w-full object-cover group-hover:scale-110 transition duration-700");
+@source inline("flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg transition-all");
+@source inline("rounded-full border-2 border-white space-y-4 mb-4 -space-x-3 justify-between items-start p-8 md:w-3/5 flex flex-col");
+@source inline("left-5");
+
+
+body { font-family: 'Inter', sans-serif; }
+
+input[type="text"] {
+  @apply bg-white w-full;
+}
+.max-w-4xl {
+    max-width: var(--container-4xl) /* 56rem = 896px */;
+}
+
+.active{
+  @apply text-indigo-600;
+}

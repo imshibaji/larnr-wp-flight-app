@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+vendor/
+
+# environment variables
+.env
+.env.production
+.parcel-cache/
+
+# macOS-specific files
+.DS_Store
+
+# jetbrains setting folder
+.idea/

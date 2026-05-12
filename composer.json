@@ -1,0 +1,32 @@
+{
+    "name": "shibaji/miniapp",
+    "scripts": {
+        "start": "php -S localhost:8080"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        },
+        "files": [
+            "app/utils/helpers.php"
+        ]
+    },
+    "authors": [
+        {
+            "name": "Shibaji Debnath",
+            "email": "imshibaji@gmail.com"
+        }
+    ],
+    "require": {
+        "flightphp/core": "^3.18",
+        "league/plates": "^3.6",
+        "guzzlehttp/guzzle": "^7.10",
+        "flightphp/cache": "^1.1",
+        "tracy/tracy": "^2.11",
+        "neuron-core/neuron-ai": "^3.3",
+        "flightphp/runway": "^1.2"
+    },
+    "require-dev": {
+        "flightphp/tracy-extensions": "^0.2.7"
+    }
+}
