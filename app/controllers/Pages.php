@@ -1,7 +1,17 @@
 <?php
 namespace App\Controllers;
 
+use flight\Engine;
+
 class Pages extends Controller {
+    protected Engine $app;
+
+    public function __construct($app) {
+        parent::__construct($app);
+        // get the mentors
+        $this->wpApi->registerCustomPostType('Mentors', 'wp/v2/mentors');
+        $this->wpApi->registerCustomPostType('Addresses', 'app/v1/addresses');
+    }
     
     public function home() {
         $page = $this->filtered($this->wpApi->getPages(), 'larnr-the-ultimate-educations-for-career-building');
@@ -17,7 +27,7 @@ class Pages extends Controller {
         $lastUpdated = $cache->created_at;
 
         $page = $this->filtered($allPages, 'mentors');
-        $mentors = $this->wpApi->getCustomPosts('mentors');
+        $mentors = $this->wpApi->getMentors();
 
         // map the mentors
         $mentors = array_map(function($mentor) {
@@ -36,7 +46,7 @@ class Pages extends Controller {
     }
 
     public function mentor($slug) {
-        $cache = $this->wpApi->getCustomPosts('mentors', true);
+        $cache = $this->wpApi->getMentor(true);
         $allPages = $cache->data;
         $lastUpdated = $cache->created_at;
 

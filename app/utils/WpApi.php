@@ -2,794 +2,55 @@
 namespace App\Utils;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 
 class WpApi {
-    private static $instance = null;
-    protected String $url = 'https://larnr.com';
+    private static ?WpApi $instance = null;
+    protected static string $url = 'https://larnr.com';
     protected Client $client;
-    public function __construct() {
-        $this->client = new Client();
-        // Auto-start session if not already active
+
+    // Core REST endpoints configuration
+    private static array $allowedEndpoints = [
+        'posts'      => 'wp-json/wp/v2/posts',
+        'pages'      => 'wp-json/wp/v2/pages',
+        'comments'   => 'wp-json/wp/v2/comments',
+        'categories' => 'wp-json/wp/v2/categories',
+        'tags'       => 'wp-json/wp/v2/tags',
+        'users'      => 'wp-json/wp/v2/users',
+        'media'      => 'wp-json/wp/v2/media'
+    ];
+
+    // Shared storage container for registered Custom Post Types
+    private static array $customEndpoints = [];
+
+    public function __construct(?string $customUrl = null) {
+        $baseUrl = $customUrl ?? self::$url;
+        $this->client = new Client([
+            'base_uri' => rtrim($baseUrl, '/') . '/',
+            'timeout'  => 10.0,
+        ]);
+
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
-        // If ?clear_all=1 is passed, wipe all WP cache keys
-        if (isset($_GET['clear_all'])) {
+
+        // Global cache cleaning triggers via GET parameters
+        if (isset($_GET['clear_all']) || (isset($_GET['flush']) && $_GET['flush'] == '1')) {
             $this->flushCache();
         }
     }
 
-    protected function tokenVerify($token) {
-        $response = $this->client->post($this->url.'/wp-json/jwt-auth/v1/token/validate', [
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer '.$token
-            ]
-        ]);
-        $token = json_decode($response->getBody()->getContents());
-        return $token;
+    /**
+     * Singleton Instance Initializer for Static Routing Contexts
+     */
+    public static function init(): self {
+        return self::getInstance();
     }
 
-    protected function login($username, $password) {
-        $response = $this->client->post($this->url.'/wp-json/jwt-auth/v1/token', [
-            'form_params' => [
-                'username' => $username,
-                'password' => $password
-            ]
-        ]);
-        $response = json_decode($response->getBody()->getContents());
-        $this->setCache('user_token', $response->token);
-        return $response;
-    }
-
-    protected function me($token) {
-        $response = $this->client->get($this->url.'/wp-json/wp/v2/users/me?context=edit', [
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-            ]
-        ]);
-        $user = json_decode($response->getBody()->getContents());
-        return $user;
-    }
-
-    protected function register($username, $email, $password, $role, $token=null) {
-        $response = $this->client->post($this->url.'/wp-json/wp/v2/users', [
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-            ],
-            'form_params' => [
-                'username' => $username,
-                'email' => $email,
-                'password' => $password,
-                'role' => $role ?? 'subscriber',
-            ]
-        ]);
-        $token = json_decode($response->getBody()->getContents());
-        return $token;
-    }
-
-    protected function getPages($obj=false, $ttl=3600) {
-        return $this->remember('pages', function() {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/pages');
-            $pages = json_decode($response->getBody()->getContents());
-            return $pages;
-        }, $obj, $ttl);
-    }
-
-    protected function getPage($id, $obj=false, $ttl=3600) {
-        return $this->remember('page_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/pages/'.$id);
-            $page = json_decode($response->getBody()->getContents());
-            return $page;
-        }, $obj, $ttl);
-    }
-
-    protected function getPageBySlug($slug, $obj=false, $ttl=3600) {
-        return $this->remember('page_slug_'.$slug, function() use ($slug) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/pages?slug='.$slug);
-            $page = json_decode($response->getBody()->getContents());
-            return $page;
-        }, $obj, $ttl);
-    }
-
-    protected function createPage($data, $token=null) {
-        try {
-            $response = $this->client->post($this->url.'/wp-json/wp/v2/pages', [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $page = json_decode($response->getBody()->getContents());
-            return $page;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null; // Return null so you can check "if ($comment)" in your controller
-        }
-    }
-
-    protected function updatePage($id, $data, $token=null) {
-        try {
-            $response = $this->client->put($this->url.'/wp-json/wp/v2/pages/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $page = json_decode($response->getBody()->getContents());
-            return $page;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null; // Return null so you can check "if ($comment)" in your controller
-        }
-    }
-
-    protected function deletePage($id, $token=null) {
-        try {
-            $response = $this->client->delete($this->url.'/wp-json/wp/v2/pages/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ]
-            ]);
-            $page = json_decode($response->getBody()->getContents());
-            return $page;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null; // Return null so you can check "if ($comment)" in your controller
-        }
-    }
-
-    protected function getCategories($obj=false, $ttl=3600) {
-        return $this->remember('categories', function() {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/categories');
-            $categories = json_decode($response->getBody()->getContents());
-            return $categories;
-        }, $obj, $ttl);
-    }
-
-    protected function getCategory($id, $obj=false, $ttl=3600) {
-        return $this->remember('category_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/categories/'.$id);
-            $category = json_decode($response->getBody()->getContents());
-            return $category;
-        }, $obj, $ttl);
-    }
-
-    protected function getCategoriesBySlug($slug, $obj=false, $ttl=3600) {
-        return $this->remember('category_slug_'.$slug, function() use ($slug) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/categories?slug='.$slug);
-            $category = json_decode($response->getBody()->getContents());
-            return $category;
-        }, $obj, $ttl);
-    }
-
-    protected function createCategory($data, $token=null) {
-        try{
-            $response = $this->client->post($this->url.'/wp-json/wp/v2/categories', [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $category = json_decode($response->getBody()->getContents());
-            return $category;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function updateCategory($id, $data, $token=null) {
-        try{
-            $response = $this->client->put($this->url.'/wp-json/wp/v2/categories/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $category = json_decode($response->getBody()->getContents());
-            return $category;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function deleteCategory($id, $token=null) {
-        try{
-            $response = $this->client->delete($this->url.'/wp-json/wp/v2/categories/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ]
-            ]);
-            $category = json_decode($response->getBody()->getContents());
-            return $category;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function getTags($obj=false, $ttl=3600) {
-        return $this->remember('tags', function() {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/tags');
-            $tags = json_decode($response->getBody()->getContents());
-            return $tags;
-        }, $obj, $ttl);
-    }
-
-    protected function getTag($id, $obj=false, $ttl=3600) {
-        return $this->remember('tag_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/tags/'.$id);
-            $tag = json_decode($response->getBody()->getContents());
-            return $tag;
-        }, $obj, $ttl);
-    }
-
-    protected function getTagsBySlug($slug, $obj=false, $ttl=3600) {
-        return $this->remember('tag_slug_'.$slug, function() use ($slug) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/tags?slug='.$slug);
-            $tag = json_decode($response->getBody()->getContents());
-            return $tag;
-        }, $obj, $ttl);
-    }
-
-    protected function createTag($data, $token=null) {
-        try{
-            $response = $this->client->post($this->url.'/wp-json/wp/v2/tags', [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $tag = json_decode($response->getBody()->getContents());
-            return $tag;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function updateTag($id, $data, $token=null) {
-        try{
-            $response = $this->client->put($this->url.'/wp-json/wp/v2/tags/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $tag = json_decode($response->getBody()->getContents());
-            return $tag;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function deleteTag($id, $token=null) {
-        try{
-            $response = $this->client->delete($this->url.'/wp-json/wp/v2/tags/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ]
-            ]);
-            $tag = json_decode($response->getBody()->getContents());
-            return $tag;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function getPosts($obj=false, $ttl=3600) {
-        return $this->remember('posts', function() {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/posts');
-            $posts = json_decode($response->getBody()->getContents());
-            return $posts;
-        }, $obj, $ttl);
-    }
-
-    protected function getPost($id, $obj=false, $ttl=3600) {
-        return $this->remember('post_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/posts/'.$id);
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-        }, $obj, $ttl);
-    }
-
-    protected function getPostBySlug($slug, $obj=false, $ttl=3600) {
-        return $this->remember('post_slug_'.$slug, function() use ($slug) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/posts?slug='.$slug);
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-        }, $obj, $ttl);
-    }
-
-    protected function createPost($data, $token=null) {
-        try {
-            $response = $this->client->post($this->url . '/wp-json/wp/v2/posts', [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . ($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data // This automatically sets Content-Type to application/json
-            ]);
-
-            // Use true as second param for json_decode if you prefer an associative array
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function updatePost($id, $data, $token=null) {
-        try {
-            $response = $this->client->put($this->url . '/wp-json/wp/v2/posts/' . $id, [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . ($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data // This automatically sets Content-Type to application/json
-            ]);
-
-            // Use true as second param for json_decode if you prefer an associative array
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null; 
-        }
-    }
-
-    protected function deletePost($id, $token=null) {
-        try {
-            $response = $this->client->delete($this->url.'/wp-json/wp/v2/posts/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ]
-            ]);
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function getComments($id, $obj=false, $ttl=3600) {
-        return $this->remember('comments_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/posts/'.$id.'/comments');
-            $comments = json_decode($response->getBody()->getContents());
-            return $comments;
-        }, $obj, $ttl);
-    }
-
-    protected function getComment($id, $obj=false, $ttl=3600) {
-        return $this->remember('comment_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/comments/'.$id);
-            $comment = json_decode($response->getBody()->getContents());
-            return $comment;
-        }, $obj, $ttl);
-    }
-
-    protected function createComment($data, $token=null) {
-        try {
-            $response = $this->client->post($this->url.'/wp-json/wp/v2/comments', [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $comment = json_decode($response->getBody()->getContents());
-            return $comment;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-            return null;
-        }
-    }
-
-    protected function updateComment($id, $data, $token=null) {
-        try {
-            $response = $this->client->put($this->url.'/wp-json/wp/v2/comments/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token')),
-                ],
-                'json' => $data
-            ]);
-            $comment = json_decode($response->getBody()->getContents());
-            return $comment;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function deleteComment($id, $token=null) {
-        try {
-            $response = $this->client->delete($this->url.'/wp-json/wp/v2/comments/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.$token
-                ]
-            ]);
-            $comment = json_decode($response->getBody()->getContents());
-            return $comment;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function getUsers($obj=false, $ttl=3600) {
-        return $this->remember('users', function() {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/users');
-            $users = json_decode($response->getBody()->getContents());
-            return $users;
-        }, $obj, $ttl);
-    }
-
-    protected function getUser($id, $obj=false, $ttl=3600) {
-        return $this->remember('user_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/users/'.$id);
-            $user = json_decode($response->getBody()->getContents());
-            return $user;
-        }, $obj, $ttl);
-    }
-
-    protected function getUserBySlug($slug, $obj=false, $ttl=3600) {
-        return $this->remember('user_slug_'.$slug, function() use ($slug) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/users?slug='.$slug);
-            $user = json_decode($response->getBody()->getContents());
-            return $user;
-        });
-    }
-
-    protected function createUser($data, $token=null) {
-        try {
-            $response = $this->client->post($this->url.'/wp-json/wp/v2/users', [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $user = json_decode($response->getBody()->getContents());
-            return $user;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function updateUser($id, $data, $token=null) {
-        try {
-            $response = $this->client->put($this->url.'/wp-json/wp/v2/users/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $user = json_decode($response->getBody()->getContents());
-            return $user;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function deleteUser($id, $token=null) {
-        try {
-            $response = $this->client->delete($this->url.'/wp-json/wp/v2/users/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ]
-            ]);
-            $user = json_decode($response->getBody()->getContents());
-            return $user;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function getCustomPosts($type, $obj=false, $ttl=3600) {
-        return $this->remember('custom_posts_'.$type, function() use ($type) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/'.$type);
-            $posts = json_decode($response->getBody()->getContents());
-            return $posts;
-        }, $obj, $ttl);
-    }
-
-    protected function getCustomPost($type, $id='', $obj=false, $ttl=3600) {
-        return $this->remember('custom_post_'.$type.'_'.$id, function() use ($type) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/'.$type.'/'.$id);
-            $posts = json_decode($response->getBody()->getContents());
-            return $posts;
-        }, $obj, $ttl);
-    }
-
-    protected function getCustomPostBySlug($type, $slug, $obj=false, $ttl=3600) {
-        return $this->remember('custom_post_slug_'.$type.'_'.$slug, function() use ($type, $slug) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/'.$type.'?slug='.$slug);
-            $posts = json_decode($response->getBody()->getContents());
-            return $posts;
-        }, $obj, $ttl);
-    }
-
-    protected function createCustomPost($type, $data, $token=null) {
-        try {
-            $response = $this->client->post($this->url.'/wp-json/wp/v2/'.$type, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function updateCustomPost($type, $id, $data, $token=null) {
-        try {
-            $response = $this->client->put($this->url.'/wp-json/wp/v2/'.$type.'/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ],
-                'json' => $data
-            ]);
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function deleteCustomPost($type, $id, $token=null) {
-        try {
-            $response = $this->client->delete($this->url.'/wp-json/wp/v2/'.$type.'/'.$id, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer '.($token ?? $this->getCache('user_token'))
-                ]
-            ]);
-            $post = json_decode($response->getBody()->getContents());
-            return $post;
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            // Log the error for debugging
-            if ($e->hasResponse()) {
-                $error = json_decode($e->getResponse()->getBody()->getContents());
-                // Log: $error->message
-                return $error;
-            }
-        }
-    }
-
-    protected function getAddresses($obj = false, $ttl = 3600) {
-        return $this->remember('addresses', function() {
-            $response = $this->client->get($this->url.'/wp-json/app/v1/address');
-            $address = json_decode($response->getBody()->getContents());
-            return $address;
-        }, $obj, $ttl);
-    }
-
-    protected function getAddress($id, $obj=false, $ttl=3600) {
-        return $this->remember('address_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/app/v1/address/'.$id);
-            $address = json_decode($response->getBody()->getContents());
-            return $address;
-        }, $obj, $ttl);
-    }
-
-    protected function createAddress($data) {
-        $response = $this->client->post($this->url.'/wp-json/app/v1/address', [
-            'json' => $data
-        ]);
-        $address = json_decode($response->getBody()->getContents());
-        return $address;
-    }
-
-    protected function updateAddress($id, $data) {
-        $response = $this->client->put($this->url.'/wp-json/app/v1/address/'.$id, [
-            'json' => $data
-        ]);
-        $address = json_decode($response->getBody()->getContents());
-        return $address;
-    }
-
-    protected function deleteAddress($id) {
-        $response = $this->client->delete($this->url.'/wp-json/app/v1/address/'.$id);
-        $address = json_decode($response->getBody()->getContents());
-        return $address;
-    }
-
-    protected function graphql($query, $obj=false, $ttl=3600) {
-        // Use a hash of the query as the cache key
-        return $this->remember('gql_' . md5($query), function() use ($query) {
-            $response = $this->client->post($this->url.'/graphql', [
-                'json' => ['query' => $query]
-            ]);
-            return json_decode($response->getBody()->getContents());
-        }, $obj, $ttl);
-    }
-
-    protected function getMedia($id, $obj=false, $ttl=3600) {
-        return $this->remember('media_'.$id, function() use ($id) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/media/'.$id);
-            $media = json_decode($response->getBody()->getContents());
-            return $media;
-        }, $obj, $ttl);
-    }
-
-    protected function getMediaBySlug($slug, $obj=false, $ttl=3600) {
-        return $this->remember('media_slug_'.$slug, function() use ($slug) {
-            $response = $this->client->get($this->url.'/wp-json/wp/v2/media?slug='.$slug);
-            $media = json_decode($response->getBody()->getContents());
-            return $media;
-        }, $obj, $ttl);
-    }
-
-    protected function getRankMathData($link, $obj=false, $ttl=3600) {
-        return $this->remember('rank_math_data-'.$link, function() use ($link) {
-            $response = $this->client->get($this->url . '/wp-json/rankmath/v1/getHead', [
-                'query' => ['url' => $link]
-            ]);
-        
-            // Correct way to get the string content before decoding
-            $body = $response->getBody()->getContents();
-            return json_decode($body);
-        }, $obj, $ttl);
-    }
-
-    protected function fetch($url, $args = [
-        'method' => 'GET',
-        'body' => null,
-        'headers' => [],
-        'query' => [],
-        'params' => [],
-        'files' => []
-    ], $obj=false, $ttl=3600) {
-        return $this->remember('fetch_'.$url, function() use ($url, $args) {
-            $response = $this->client->request($method, $url, [
-                'query' => $args['query'],
-                'body' => $args['body'],
-                'headers' => $args['headers'],
-                'form_params' => $args['params'],
-                'multipart' => $args['files']
-            ]);
-            $data = json_decode($response->getBody()->getContents());
-            return $data;
-        }, $obj, $ttl);
-    }
-
-    // This handles: WpApi::fetchData('...')
-    public static function __callStatic($name, $arguments) {
-        $instance = self::init();
-        return $instance->$name(...$arguments);
-    }
-
-    // This handles: $wpApi->fetchData('...')
-    public function __call($name, $arguments) {
-        return $this->$name(...$arguments);
-    }
-
-    public static function init() {
+    /**
+     * Singleton Instance Getter for Static Routing Contexts
+     */
+    public static function getInstance(): self {
         if (self::$instance === null) {
             self::$instance = new self();
         }
@@ -797,67 +58,471 @@ class WpApi {
     }
 
     /**
-     * Cache logic using PHP Sessions
+     * Register a new Custom Post Type endpoint (Static & Dynamic compatible)
      */
-    protected function remember($key, $callback, $obj=false, $ttl = 3600) {
-        $now = time();
-        $cacheKey = 'wp_api_' . $key;
+    public static function registerCustomPostType(string $pluralName, string $restBase) {
+        $key = strtolower($pluralName);
+        self::$customEndpoints[$key] = 'wp-json/' . ltrim($restBase, '/');
+    }
 
-        // Check if ?refresh=1 is in the URL to bypass cache
-        $forceRefresh = isset($_GET['refresh']) && $_GET['refresh'] == '1';
+    // ==========================================
+    // CORE AUTHENTICATION MANAGEMENT
+    // ==========================================
 
-        // Check if ?flush=1 is in the URL to flush cache
-        if (isset($_GET['flush']) && $_GET['flush'] == '1') {
-            $this->flushCache();
+    /**
+     * Authenticates a user against JWT Auth and saves token to cache.
+     */
+    public function login(string $username, string $password) {
+        try {
+            $response = $this->client->post('wp-json/jwt-auth/v1/token', [
+                'json' => [
+                    'username' => $username,
+                    'password' => $password
+                ]
+            ]);
+            
+            $data = json_decode($response->getBody()->getContents());
+            
+            if (isset($data->token)) {
+                $this->setCache('user_token', $data->token);
+            }
+            
+            return $data;
+        } catch (RequestException $e) {
+            return $e->hasResponse() ? json_decode($e->getResponse()->getBody()->getContents()) : null;
+        }
+    }
+
+    /**
+     * Validates if the active cached token or an explicitly passed token is authentic.
+     */
+    public function validateToken(?string $token = null) {
+        $targetToken = $token ?? $this->getCache('user_token');
+        if (!$targetToken) {
+            return false;
         }
 
-        // If not forcing refresh, check if session exists and is valid (1 hour)
+        try {
+            $response = $this->client->post('wp-json/jwt-auth/v1/token/validate', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $targetToken
+                ]
+            ]);
+            $data = json_decode($response->getBody()->getContents());
+            
+            // JWT Auth standard response for validation returns code "jwt_auth_valid_token"
+            return isset($data->code) && $data->code === 'jwt_auth_valid_token';
+        } catch (RequestException $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Retrieves the profile schema data of the currently authenticated user session.
+     */
+    public function me(?string $token = null) {
+        // WordPress edit context allows access to non-public profile configuration details
+        return $this->request('GET', 'wp-json/wp/v2/users/me?context=edit', [], $token);
+    }
+
+    /**
+     * Clears authentication values out of the cache layer completely.
+     */
+    public function logout() {
+        $this->deleteCache('user_token');
+        return true;
+    }
+
+    // ==========================================
+    // CORE NATIVE EXTENSION ENDPOINTS
+    // ==========================================
+
+    public function graphql(string $query, bool $obj = false, int $ttl = 3600) {
+        return $this->remember('gql_' . md5($query), function() use ($query) {
+            try {
+                $response = $this->client->post('graphql', ['json' => ['query' => $query]]);
+                return json_decode($response->getBody()->getContents());
+            } catch (RequestException $e) {
+                return $e->hasResponse() ? json_decode($e->getResponse()->getBody()->getContents()) : null;
+            }
+        }, $obj, $ttl);
+    }
+
+    public function getRankMathData(string $link, bool $obj = false, int $ttl = 3600) {
+        return $this->remember('rank_math_data-' . md5($link), function() use ($link) {
+            try {
+                $response = $this->client->get('wp-json/rankmath/v1/getHead', ['query' => ['url' => $link]]);
+                return json_decode($response->getBody()->getContents());
+            } catch (RequestException $e) {
+                return $e->hasResponse() ? json_decode($e->getResponse()->getBody()->getContents()) : null;
+            }
+        }, $obj, $ttl);
+    }
+
+    // ==========================================
+    // CACHE INFRASTRUCTURE LAYER
+    // ==========================================
+    protected function remember($key, $callback, $obj = false, $ttl = 3600) {
+        $now = time();
+        $cacheKey = 'wp_api_' . $key;
+        $forceRefresh = isset($_GET['refresh']) && $_GET['refresh'] == '1';
+
         if (!$forceRefresh && isset($_SESSION[$cacheKey])) {
             $cache = $_SESSION[$cacheKey];
             if (($now - $cache['created_at']) < $ttl) {
-                // FIX: Respect $ref even when returning from cache
                 return $obj ? (object) $cache : $cache['data'];
             }
         }
 
-        // Fetch fresh data
         $data = $callback();
-
-        // Store data + timestamp in session
-        $cacheData = [
-            'created_at' => $now,
-            'data' => $data
-        ];
+        $cacheData = ['created_at' => $now, 'data' => $data];
         $_SESSION[$cacheKey] = $cacheData;
 
         return $obj ? (object) $cacheData : $data;
     }
 
-    protected function flushCache() {
+    public function flushCache() {
         foreach ($_SESSION as $key => $value) {
             if (strpos($key, 'wp_api_') === 0) {
                 unset($_SESSION[$key]);
             }
         }
+    }
+
+    public function clearCache() {
+        $this->flushCache();
     }
 
     protected function getCache($key) {
-        return isset($_SESSION['wp_api_'.$key]) ? $_SESSION['wp_api_'.$key] : null;
+        return $_SESSION['wp_api_' . $key] ?? null;
     }
 
     protected function setCache($key, $value) {
-        $_SESSION['wp_api_'.$key] = $value;
+        $_SESSION['wp_api_' . $key] = $value;
     }
 
     protected function deleteCache($key) {
-        unset($_SESSION['wp_api_'.$key]);
+        unset($_SESSION['wp_api_' . $key]);
     }
 
-    protected function clearCache() {
+    // ==========================================
+    // MAGIC CORE ROUTERS
+    // ==========================================
+
+    public function __call(string $name, array $arguments) {
+        if (method_exists($this, $name)) {
+            return call_user_func_array([$this, $name], $arguments);
+        }
+        return $this->executeRoutedRequest($name, $arguments);
+    }
+
+    public static function __callStatic(string $name, array $arguments) {
+        $instance = self::getInstance();
+        if (method_exists($instance, $name)) {
+            return call_user_func_array([$instance, $name], $arguments);
+        }
+        return $instance->executeRoutedRequest($name, $arguments);
+    }
+
+    private function request(string $method, string $endpoint, array $options = [], ?string $token = null) {
+        $bearerToken = $token ?? $this->getCache('user_token');
+        if ($bearerToken) {
+            $options['headers']['Authorization'] = 'Bearer ' . $bearerToken;
+        }
+
+        try {
+            // Guzzle automatically calculates boundary strings if 'multipart' is active.
+            // Do NOT manually define Content-Type headers when running multipart file pushes.
+            $response = $this->client->request($method, $endpoint, $options);
+            return json_decode($response->getBody()->getContents(), false) ?? (object)[];
+        } catch (RequestException $e) {
+            if ($e->hasResponse()) {
+                return json_decode($e->getResponse()->getBody()->getContents(), false) ?? (object)[];
+            }
+            return (object)[];
+        }
+    }
+
+    /**
+     * Automated Cache Eviction Engine
+     * Selectively purges transient lists and single entry keys related to the modified resource type.
+     */
+    private function invalidateResourceCache(string $resource, $id = null): void {
         foreach ($_SESSION as $key => $value) {
-            if (strpos($key, 'wp_api_') === 0) {
-                unset($_SESSION[$key]);
+            // Target only cache elements generated by the active class
+            if (str_starts_with($key, 'wp_api_')) {
+                
+                // 1. Purge general index lists and search query batches for this resource type
+                // Triggers on patterns matching: wp_api_pages_list or wp_api_media_list_xyz
+                if (str_contains($key, 'wp_api_' . $resource . '_list') || $key === 'wp_api_' . $resource) {
+                    unset($_SESSION[$key]);
+                }
+
+                // 2. Target and purge single record items if a specific ID string was manipulated
+                // Triggers on patterns matching: wp_api_pages_42 or wp_api_media_108
+                if ($id !== null && str_contains($key, 'wp_api_' . $resource . '_' . $id)) {
+                    unset($_SESSION[$key]);
+                }
+                
+                // 3. Purge related slug index states for consistency if metadata edits occurred
+                if (str_contains($key, 'wp_api_' . $resource . '_slug_')) {
+                    unset($_SESSION[$key]);
+                }
             }
         }
+    }
+
+    private function executeRoutedRequest(string $name, array $arguments) {
+        // 1. Check if the method explicitly requests a slug extraction (e.g., getPostBySlug)
+        $isSlugMethod = false;
+        if (preg_match('/^(get)(.+)BySlug$/i', $name, $matches)) {
+            $action = 'get';
+            $requestedResource = strtolower($matches[2]); // Extracts "post" or "page"
+            $isSlugMethod = true;
+        } else {
+            // Default split configuration for normal get, create, update, delete methods
+            if (!preg_match('/^(get|create|update|delete)(.+)$/i', $name, $matches)) {
+                throw new \BadMethodCallException("Method {$name} does not exist in class " . __CLASS__);
+            }
+            $action = strtolower($matches[1]);
+            $requestedResource = strtolower($matches[2]);
+        }
+
+        // 2. Fetch all registered plural array keys
+        $allPluralKeys = array_merge(array_keys(self::$allowedEndpoints), array_keys(self::$customEndpoints));
+        $resource = null;
+
+        // 3. Match the requested string against your dictionary keys (supporting both singular & plural inputs)
+        foreach ($allPluralKeys as $pluralKey) {
+            $singularKey = $this->getSingularMapping($pluralKey);
+            
+            if ($requestedResource === $pluralKey || $requestedResource === $singularKey) {
+                $resource = $pluralKey;
+                break;
+            }
+        }
+
+        // If the resource cannot be found anywhere in your registered arrays, throw the exception
+        if (!$resource) {
+            throw new \BadMethodCallException("Method {$name} does not exist in class " . __CLASS__);
+        }
+
+        $endpoint = self::$allowedEndpoints[$resource] ?? self::$customEndpoints[$resource];
+
+        // 4. Extract call parameters safely from the indexed array
+        $param1 = $arguments[0] ?? null; 
+        $param2 = $arguments[1] ?? null; 
+        $param3 = $arguments[2] ?? null; 
+
+        switch ($action) {
+            case 'get':
+                // Route A: Explicit BySlug execution or dynamic string passing
+                if ($isSlugMethod || (is_string($param1) && !is_numeric($param1))) {
+                    $slugString = (string)$param1;
+                    $cacheKey = $resource . '_slug_' . md5($slugString);
+                    
+                    // Re-align array param assignments since ID index is skipped
+                    $obj = is_bool($param2) ? $param2 : false;
+                    $ttl = is_int($param3) ? $param3 : 3600;
+
+                    return $this->remember($cacheKey, function() use ($endpoint, $slugString) {
+                        return $this->request('GET', $endpoint, ['query' => ['slug' => $slugString]]);
+                    }, $obj, $ttl);
+                }
+
+                // Route B: Single Item Lookup by numeric database ID (e.g., getPage(12))
+                if ($param1 && (is_int($param1) || is_numeric($param1))) {
+                    $cacheKey = $resource . '_' . $param1;
+                    $obj = is_bool($param2) ? $param2 : false;
+                    $ttl = is_int($param3) ? $param3 : 3600;
+
+                    return $this->remember($cacheKey, function() use ($endpoint, $param1) {
+                        return $this->request('GET', "{$endpoint}/{$param1}");
+                    }, $obj, $ttl);
+                }
+
+                // Route C: Batch List Requests (e.g., getPages(true))
+                $queryParams = is_array($param1) ? $param1 : [];
+                $obj = is_array($param1) ? (is_bool($param2) ? $param2 : false) : (is_bool($param1) ? $param1 : false);
+                $ttl = is_array($param1) ? (is_int($param3) ? $param3 : 3600) : (is_int($param2) ? $param2 : 3600);
+                $cacheKey = $resource . '_list_' . md5(json_encode($queryParams));
+
+                return $this->remember($cacheKey, function() use ($endpoint, $queryParams) {
+                    return $this->request('GET', $endpoint, ['query' => $queryParams]);
+                }, $obj, $ttl);
+
+            case 'create':
+                if (is_array($param1) && isset($param1['file_path'])) {
+                    $filePath = $param1['file_path'];
+                    $filename = $param1['file_name'] ?? basename($filePath);
+                    $mimeType = $param1['file_type'] ?? mime_content_type($filePath);
+
+                    if (!file_exists($filePath)) {
+                        throw new \InvalidArgumentException("The target upload file does not exist: {$filePath}");
+                    }
+
+                    $multipartOptions = [
+                        'multipart' => [
+                            [
+                                'name'     => 'file',
+                                'contents' => fopen($filePath, 'r'),
+                                'filename' => $filename,
+                                'headers'  => ['Content-Type' => $mimeType]
+                            ]
+                        ]
+                    ];
+
+                    foreach ($param1 as $key => $value) {
+                        if (in_array($key, ['file_path', 'file_name', 'file_type'])) {
+                            continue;
+                        }
+                        $multipartOptions['multipart'][] = [
+                            'name'     => $key,
+                            'contents' => $value
+                        ];
+                    }
+
+                    $response = $this->request('POST', $endpoint, $multipartOptions, $param2);
+                    $this->invalidateResourceCache($resource);
+                    return $response;
+                }
+
+                $response = $this->request('POST', $endpoint, ['json' => is_array($param1) ? $param1 : []], $param2);
+                $this->invalidateResourceCache($resource);
+                return $response;
+
+            case 'update':
+                $response = $this->request('PUT', "{$endpoint}/{$param1}", ['json' => is_array($param2) ? $param2 : []], $param3);
+                $this->invalidateResourceCache($resource, $param1);
+                return $response;
+
+            case 'delete':
+                $deleteOptions = [];
+                if (is_array($param2)) {
+                    $deleteOptions['query'] = $param2;
+                }
+                
+                $tokenOverride = is_string($param2) ? $param2 : (is_string($param3) ? $param3 : null);
+
+                $response = $this->request('DELETE', "{$endpoint}/{$param1}", $deleteOptions, $tokenOverride);
+                $this->invalidateResourceCache($resource, $param1);
+                return $response;
+        }
+    }
+
+    /**
+     * Polymorphic helper to fetch drafts for any resource type with pagination.
+     * Usage example: WpApi::getDrafts('posts', 1, 10);
+     */
+    public function getDrafts(string $resourceType, int $page = 1, int $perPage = 20, bool $obj = false, int $ttl = 5) {
+        $resource = $this->resolveResourceKey($resourceType);
+        $methodName = 'get' . ucfirst($resource);
+
+        return $this->executeRoutedRequest($methodName, [
+            ['status' => 'draft', 'page' => $page, 'per_page' => $perPage], 
+            $obj, 
+            $ttl
+        ]);
+    }
+
+    /**
+     * Polymorphic helper to fetch trashed items for any resource type with pagination.
+     * Usage example: WpApi::getTrash('pages', 2, 15);
+     */
+    public function getTrash(string $resourceType, int $page = 1, int $perPage = 20, bool $obj = false, int $ttl = 5) {
+        $resource = $this->resolveResourceKey($resourceType);
+        $methodName = 'get' . ucfirst($resource);
+
+        return $this->executeRoutedRequest($methodName, [
+            ['status' => 'trash', 'page' => $page, 'per_page' => $perPage], 
+            $obj, 
+            $ttl
+        ]);
+    }
+
+    /**
+     * Loops through all items currently in the trash for a resource type 
+     * and permanently deletes them, bypassing the recycle bin constraint.
+     */
+    public function emptyTrash(string $resourceType): array {
+        $resource = $this->resolveResourceKey($resourceType);
+        $deleteMethod = 'delete' . ucfirst($this->singularize($resource));
+        
+        $results = [
+            'success' => true,
+            'deleted_ids' => [],
+            'errors' => []
+        ];
+
+        // Fetch up to 100 items from the trash to process in this batch cycle
+        $trashedItems = $this->getTrash($resource, 1, 100);
+
+        if (empty($trashedItems) || !is_array($trashedItems)) {
+            return $results;
+        }
+
+        foreach ($trashedItems as $item) {
+            if (!isset($item->id)) {
+                continue;
+            }
+
+            // Force permanent deletion by routing through your dynamic 'delete' block
+            $response = $this->executeRoutedRequest($deleteMethod, [$item->id, ['force' => true]]);
+
+            if ($response && isset($response->deleted) && $response->deleted === true) {
+                $results['deleted_ids'][] = $item->id;
+            } else {
+                $results['success'] = false;
+                $results['errors'][] = [
+                    'id' => $item->id,
+                    'message' => $response->message ?? 'Unknown permanent deletion error'
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Internal structural normalization helper to isolate mapping dictionary keys.
+     */
+    private function resolveResourceKey(string $resourceType): string {
+        $resource = strtolower($resourceType);
+        if (!isset(self::$allowedEndpoints[$resource]) && !isset(self::$customEndpoints[$resource])) {
+            $resource = $this->pluralize($resource);
+        }
+        return $resource;
+    }
+
+    /**
+     * Internal strict dictionary helper mapping your specific plural keys back to singular terms.
+     */
+    private function getSingularMapping(string $pluralWord): string {
+        return $this->singularize($pluralWord);
+    }
+
+    /**
+     * Advanced singularization helper addressing 'es' suffix conversions safely.
+     */
+    protected function singularize(string $word): string {
+        $word = strtolower($word);
+        if (str_ends_with($word, 'addresses')) return 'address';
+        if (str_ends_with($word, 'categories')) return 'category';
+        if (str_ends_with($word, 'ies')) return substr($word, 0, -3) . 'y';
+        if (str_ends_with($word, 'es') && !str_ends_with($word, 'pages')) return substr($word, 0, -2);
+        if (str_ends_with($word, 's') && !str_ends_with($word, 'ss')) return substr($word, 0, -1);
+        return $word;
+    }
+
+    /**
+     * Advanced pluralization mapping helper.
+     */
+    protected function pluralize(string $word): string {
+        $word = strtolower($word);
+        if ($word === 'address') return 'addresses';
+        if ($word === 'category') return 'categories';
+        if (str_ends_with($word, 'y')) return substr($word, 0, -1) . 'ies';
+        if (str_ends_with($word, 's') || str_ends_with($word, 'ch') || str_ends_with($word, 'sh')) return $word . 'es';
+        return $word . 's';
     }
 }

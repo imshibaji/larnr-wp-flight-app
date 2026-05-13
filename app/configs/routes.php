@@ -47,7 +47,14 @@ $app->route('/token', function() use($app) {
 
 $app->route('/posts', function() use($app) {
   $wpapi = new WpApi();
+  // $wpapi->createPost([
+  //   'title' => 'Test Post',
+  //   'content' => 'This is a test post',
+  // ]);
   $app->json($wpapi->getPosts());
+  // $app->json($wpapi->getTrash('post'));
+  // $app->json($wpapi->getDrafts('post'));
+  // $app->json($wpapi->getPostBySlug('test-post-2'));
 });
 
 $app->route('/seo', function() use($app) {
