@@ -1,9 +1,11 @@
 <?php
 
 use App\Controllers\Pages;
+use App\Controllers\Auth;
 use App\Utils\WpApi;
 use App\Ai\Agents\MyAgent;
 use NeuronAI\Chat\Messages\UserMessage;
+use flight\net\Router;
 
 
 // $app = Flight::app();
@@ -13,19 +15,43 @@ $app->route('/', [Pages::class, 'home']);
 $app->route('/mentors', [Pages::class, 'mentors']);
 $app->route('/mentors/@slug', [Pages::class, 'mentor']);
 
+
+// Auth Section
+$app->group('', function(Router $router) use($app) {
+  // $router->get('/login', [Auth::class, 'index']);
+  $router->get('/login', [Auth::class, 'login']);
+  $router->get('/register', [Auth::class, 'register']);
+  $router->post('/register', [Auth::class, 'register']);
+  $router->get('/forget', [Auth::class, 'forget']);
+  $router->get('/reset', [Auth::class, 'reset']);
+  $router->get('/valid', [Auth::class, 'valid']);
+  $router->get('/token', [Auth::class, 'token']);
+  $router->get('/logout', [Auth::class, 'logout']);
+});
+
+
+$app->route('/me', function() use ($app) {
+  $app->json(WpApi::me());
+});
+
 // Auth
-$app->route('/login', function() use ($app) {
-  // $app->render('fronts/login');
-  $app->json(WpApi::init()->login('imshibaji', 'Sdnsdn1497@1'));
-});
+// $app->route('/login', function() use ($app) {
+//   // $app->render('fronts/login');
+//   $app->json(WpApi::login('imshibaji', 'Sdnsdn1497@1'));
+// });
 
-$app->route('/register', function() use ($app) {
-  $app->render('fronts/register');
-});
+// $app->route('/token', function() use($app) {
+//   $wpapi = new WpApi();
+//   $app->json(['token' => $wpapi->token()]);
+// });
 
-$app->route('/forget', function() use ($app) {
-  $app->render('fronts/forget');
-});
+// $app->route('/valid', function() use($app) {
+//   $app->json(['isToken' => WpApi::validateToken()]);
+// });
+
+// $app->route('/logout', function() use ($app) {
+//   $app->json(WpApi::logout());
+// });
 
 $app->route('/dashboard', function() use ($app) {
   $app->render('backs/dashboard');
@@ -33,16 +59,6 @@ $app->route('/dashboard', function() use ($app) {
 
 $app->route('/menus', function() use ($app) {
   $app->json(WpApi::init()->graphql('{menus(where: {location:MAX_MEGA_MENU_1}){nodes{id name menuItems{nodes{id label path}}}}}'));
-});
-
-$app->route('/json', function() use($app) {
-  $wpapi = new WpApi($app);
-  $app->json($wpapi->getPages());
-});
-
-$app->route('/token', function() use($app) {
-  $wpapi = new WpApi();
-  $app->json($wpapi->getCache('user_token'));
 });
 
 $app->route('/posts', function() use($app) {

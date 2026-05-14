@@ -7,7 +7,7 @@ use GuzzleHttp\Exception\RequestException;
 class WpApi {
     private static ?WpApi $instance = null;
     protected static string $url = 'https://larnr.com';
-    protected Client $client;
+    private Client $client;
 
     // Core REST endpoints configuration
     private static array $allowedEndpoints = [
@@ -60,7 +60,7 @@ class WpApi {
     /**
      * Register a new Custom Post Type endpoint (Static & Dynamic compatible)
      */
-    public static function registerCustomPostType(string $pluralName, string $restBase) {
+    protected static function registerCustomPostType(string $pluralName, string $restBase) {
         $key = strtolower($pluralName);
         self::$customEndpoints[$key] = 'wp-json/' . ltrim($restBase, '/');
     }
@@ -72,7 +72,7 @@ class WpApi {
     /**
      * Authenticates a user against JWT Auth and saves token to cache.
      */
-    public function login(string $username, string $password) {
+    protected function login(string $username, string $password) {
         try {
             $response = $this->client->post('wp-json/jwt-auth/v1/token', [
                 'json' => [
@@ -94,10 +94,62 @@ class WpApi {
     }
 
     /**
+     * Display Token
+     */
+    protected function token() {
+        return $this->getCache('user_token');
+    }
+
+    /**
+     * Triggers a password reset workflow by sending a notification email 
+     * to the user with a reset link and a validation key.
+     */
+    public function forgetPassword(string $usernameOrEmail): ?object {
+        try {
+            // WordPress core endpoint handling user password reset requests
+            $response = $this->client->post('wp-json/wp/v2/users/lost-password', [
+                'json' => [
+                    'user_login' => $usernameOrEmail
+                ]
+            ]);
+            
+            return json_decode($response->getBody()->getContents(), false) ?? (object)[];
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            if ($e->hasResponse()) {
+                return json_decode($e->getResponse()->getBody()->getContents(), false);
+            }
+            return (object)['code' => 'server_error', 'message' => 'Network connectivity failure.'];
+        }
+    }
+
+    /**
+     * Confirms the reset token string sent to the email and applies 
+     * the newly specified user password.
+     */
+    public function resetPassword(string $usernameOrEmail, string $validationKey, string $newPassword): ?object {
+        try {
+            $response = $this->client->post('wp-json/wp/v2/users/reset-password', [
+                'json' => [
+                    'user_login' => $usernameOrEmail,
+                    'key'        => $validationKey,
+                    'password'   => $newPassword
+                ]
+            ]);
+            
+            return json_decode($response->getBody()->getContents(), false) ?? (object)[];
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            if ($e->hasResponse()) {
+                return json_decode($e->getResponse()->getBody()->getContents(), false);
+            }
+            return (object)['code' => 'server_error', 'message' => 'Unable to execute reset process.'];
+        }
+    }
+
+    /**
      * Validates if the active cached token or an explicitly passed token is authentic.
      */
-    public function validateToken(?string $token = null) {
-        $targetToken = $token ?? $this->getCache('user_token');
+    protected function validateToken(?string $token = null) {
+        $targetToken = $token ?? $this->token();
         if (!$targetToken) {
             return false;
         }
@@ -120,7 +172,7 @@ class WpApi {
     /**
      * Retrieves the profile schema data of the currently authenticated user session.
      */
-    public function me(?string $token = null) {
+    protected function me(?string $token = null) {
         // WordPress edit context allows access to non-public profile configuration details
         return $this->request('GET', 'wp-json/wp/v2/users/me?context=edit', [], $token);
     }
@@ -128,7 +180,7 @@ class WpApi {
     /**
      * Clears authentication values out of the cache layer completely.
      */
-    public function logout() {
+    protected function logout() {
         $this->deleteCache('user_token');
         return true;
     }
@@ -137,7 +189,7 @@ class WpApi {
     // CORE NATIVE EXTENSION ENDPOINTS
     // ==========================================
 
-    public function graphql(string $query, bool $obj = false, int $ttl = 3600) {
+    protected function graphql(string $query, bool $obj = false, int $ttl = 3600) {
         return $this->remember('gql_' . md5($query), function() use ($query) {
             try {
                 $response = $this->client->post('graphql', ['json' => ['query' => $query]]);
@@ -148,7 +200,7 @@ class WpApi {
         }, $obj, $ttl);
     }
 
-    public function getRankMathData(string $link, bool $obj = false, int $ttl = 3600) {
+    protected function getRankMathData(string $link, bool $obj = false, int $ttl = 3600) {
         return $this->remember('rank_math_data-' . md5($link), function() use ($link) {
             try {
                 $response = $this->client->get('wp-json/rankmath/v1/getHead', ['query' => ['url' => $link]]);
@@ -181,7 +233,7 @@ class WpApi {
         return $obj ? (object) $cacheData : $data;
     }
 
-    public function flushCache() {
+    protected function flushCache() {
         foreach ($_SESSION as $key => $value) {
             if (strpos($key, 'wp_api_') === 0) {
                 unset($_SESSION[$key]);
@@ -189,7 +241,7 @@ class WpApi {
         }
     }
 
-    public function clearCache() {
+    protected function clearCache() {
         $this->flushCache();
     }
 
@@ -225,7 +277,7 @@ class WpApi {
     }
 
     private function request(string $method, string $endpoint, array $options = [], ?string $token = null) {
-        $bearerToken = $token ?? $this->getCache('user_token');
+        $bearerToken = $token ?? $this->token();
         if ($bearerToken) {
             $options['headers']['Authorization'] = 'Bearer ' . $bearerToken;
         }
